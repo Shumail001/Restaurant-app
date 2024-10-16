@@ -4,8 +4,8 @@ const jwt = require("jsonwebtoken")
 
 const RegisterUser = async (req, res) => {
     try{
-        const {username,email,password,phone} = req.body;
-        if(!username || !email || !password || !phone){
+        const {username,email,password,phone,answer} = req.body;
+        if(!username || !email || !password || !phone || !answer){
             return res.status(500).send({
                 success: false,
                 message: "Please provide all fields",
@@ -24,12 +24,14 @@ const RegisterUser = async (req, res) => {
             email: email,
             password: password,
             phone: phone,
+            answer: answer,
 
         })
 
         return res.status(201).send({
             success: true,
             message: "User Create Successfully",
+            user
         })
 
     }catch(err){
@@ -117,25 +119,40 @@ const updateUser = async (req, res) => {
             });
         }
 
-        const updatedUserData = req.body;
-        if (!updatedUserData || Object.keys(updatedUserData).length === 0) {
-            return res.status(400).send({
-                success: false,
-                message: "No data provided for update",
-            });
-        }
+        // const updatedUserData = req.body;
+        // if (!updatedUserData || Object.keys(updatedUserData).length === 0) {
+        //     return res.status(400).send({
+        //         success: false,
+        //         message: "No data provided for update",
+        //     });
+        // }
 
-        const user = await User.findByIdAndUpdate(userId, updatedUserData, {
-            new: true,
-            runValidators: true,
-        });
+        // const user = await User.findByIdAndUpdate(userId, updatedUserData, {
+        //     new: true,
+        //     runValidators: true,
+        // });
 
+        // if (!user) {
+        //     return res.status(404).send({
+        //         success: false,
+        //         message: "User update failed. User not found.",
+        //     });
+        // }
+
+        const user = await User.findById(userId)
         if (!user) {
             return res.status(404).send({
                 success: false,
-                message: "User update failed. User not found.",
+                message: "User not found",
             });
         }
+        // update user
+        const {userName,address,phone} = req.body
+        if (userName) user.userName = userName
+        if (address) user.address = address
+        if(phone) user.phone = phone
+
+        await user.save();
 
         return res.status(200).send({
             success: true,
@@ -184,10 +201,106 @@ const deleteUser = async(req,res) =>{
     }
 }
 
+const updatePassword = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).send({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const { existingPassword, newPassword } = req.body;
+        if (!existingPassword || !newPassword) {
+            return res.status(400).send({
+                success: false,
+                message: "Please provide both existing and new passwords.",
+            });
+        }
+
+        const isMatch = await user.matchPassword(existingPassword);
+        if (!isMatch) {
+            return res.status(400).send({
+                success: false,
+                message: "Current password is incorrect.",
+            });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        return res.status(200).send({
+            success: true,
+            message: "Password updated successfully",
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send({
+            success: false,
+            message: "Failed to update password",
+            error: err.message,
+        });
+    }
+};
+
+
+// Rset Password base on Answer
+const ResetPassword = async(req, res) => {
+    try{
+        const user = await User.findById(req.user.id)
+        if(!user){
+            return res.status(404).send({
+                success: false,
+                message: "User not found",
+            });
+        }
+        const {newPassword, confirmNewPassword, answer} = req.body
+        if(!newPassword || !confirmNewPassword || !answer){
+            return res.status(500).send({
+                success: false,
+                message: "Please provide all fields like answer , newPassword and confirmNewPassword",
+            });
+        }
+        if(await user.answer === answer){
+            user.password = undefined;
+            if(newPassword === confirmNewPassword){
+                user.password = newPassword;
+                await user.save();
+            }else{
+                return res.status(404).send({
+                    success: false,
+                    message: "newPassword and confirm new Password are not same",
+                });
+            }
+        }else{
+            return res.status(404).send({
+                success: false,
+                message: "Your answer is wrong",
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Password reset Successfully"
+        })
+    }catch (err) {
+        console.error(err);
+        return res.status(500).send({
+            success: false,
+            message: "Failed to update password",
+            error: err.message,
+        });
+    }
+}
+
+
+
 module.exports = {
     RegisterUser,
     loginUser,
     getUser,
     updateUser,
-    deleteUser
+    deleteUser,
+    updatePassword,
+    ResetPassword
 }
